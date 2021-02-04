@@ -1,0 +1,43 @@
+all: olderData/part-00000 newerData/part-00000 DiffPossiblyDivorced.txt SamePossiblyDivorced.txt sameParties.txt differentParties.txt newcleanDataParties.txt oldcleanDataParties.txt stillAlive.txt plotsForProject.pdf 
+
+clean:
+	rm -r olderData newerData DiffPossiblyDivorced.txt SamePossiblyDivorced.txt sameParties.txt differentParties.txt newcleanDataParties.txt oldcleanDataParties.txt stillAlive.txt DiffIsNotDivorced.txt DiffSpousePassedAway.txt SameIsNotDivorced.txt SameSpousePassedAway.txt plotsForProject.pdf
+
+olderData/part-00000: allMarriages.py       				#get out all the married couples
+	spark-submit ./allMarriages.py "SWVF_2018.gz" "olderData"
+
+newerData/part-00000: allMarriages.py
+	spark-submit ./allMarriages.py "SWVF_2020.gz" "newerData"
+
+oldcleanDataParties.txt: cleanUpFile.awk olderData/part-00000    	# clean up list of married couples from old data
+	gawk -f cleanUpFile.awk "old" olderData/part-00000 > "oldcleanDataParties.txt"
+
+newcleanDataParties.txt: cleanUpFile.awk newerData/part-00000		# clean up from new data
+	gawk -f cleanUpFile.awk "new" newerData/part-00000 > "newcleanDataParties.txt"
+
+# this needs to check if they are divorced or if one just passed away
+
+stillAlive.txt: singlePeople.awk					# this will only take in the new Ohio voters data
+	gawk -f singlePeople.awk "SWVF_2020.gz"
+
+# this extracts the couples from the married list that have different party affiliations
+
+differentParties.txt: differentAffiliations.awk oldcleanDataParties.txt
+	gawk -f	differentAffiliations.awk > "differentParties.txt"
+
+sameParties.txt: sameAffiliations.awk oldcleanDataParties.txt
+	gawk -f	differentAffiliations.awk > "sameParties.txt"
+
+# this uses the list of different affiliations from the old data and checks if the couple is still married in the new married data
+# taking into account if one passes away
+
+DiffPossiblyDivorced.txt: isPossiblyDivorced.awk differentParties.txt newcleanDataParties.txt stillAlive.txt
+	gawk -f isPossiblyDivorced.awk differentParties.txt newcleanDataParties.txt stillAlive.txt "Diff" > "DiffPossiblyDivorced.txt"
+
+
+SamePossiblyDivorced.txt: isPossiblyDivorced.awk sameParties.txt newcleanDataParties.txt stillAlive.txt
+	gawk -f isPossiblyDivorced.awk sameParties.txt newcleanDataParties.txt stillAlive.txt "Same" > "SamePossiblyDivorced.txt"
+
+plotsForProject.pdf: divorceGraph.py sameParties.txt differentParties.txt SamePossiblyDivorced.txt DiffPossiblyDivorced.txt
+	python3 divorceGraph.py
+
